@@ -10,3 +10,4 @@ data/user_profile.json
 build/
 dist/
 .claude/
+graphify-out/
