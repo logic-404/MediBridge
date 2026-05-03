@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from medibridge.data.parse_mbs_xml import parse_mbs_xml
+from medibridge.data.parsers.mbs_xml import parse_mbs_xml
 
 
 def _write(tmp_path: Path, body: str) -> Path:

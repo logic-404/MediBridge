@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 
 from medibridge.data import db as dbmod
-from medibridge.data.seed_insurers import seed_all
+from medibridge.data.ingest.insurers import seed_all
+from medibridge.data.ingest.mbs import (
+    insert_imap_mappings,
+    insert_mbs_items,
+    populate_fts,
+)
 from medibridge.models.mbs_item import IMAPMapping, MBSItem
 from medibridge.tools.coverage_calculator import _calculate
 
@@ -24,12 +29,12 @@ def conn(tmp_path: Path):
                 schedule_fee=101.35, benefit_85=86.15, benefit_75=76.05,
                 benefit_type="C", category="1", group_code="A4"),
     ]
-    dbmod.insert_mbs_items(c, items)
-    dbmod.insert_imap_mappings(c, [
+    insert_mbs_items(c, items)
+    insert_imap_mappings(c, [
         IMAPMapping(item_num="23", mapped_item="23"),
         IMAPMapping(item_num="104", mapped_item="104"),
     ])
-    dbmod.populate_fts(c)
+    populate_fts(c)
     seed_all(c)
     c.commit()
     yield c

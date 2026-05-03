@@ -9,6 +9,7 @@ from langgraph.prebuilt import ToolNode
 from medibridge.agent.prompts import system_prompt
 from medibridge.agent.state import MediBridgeState
 from medibridge.config import CHAT_MODEL, settings
+from medibridge.tools.clinic_search import search_clinics
 from medibridge.tools.coverage_calculator import calculate_oshc_coverage
 from medibridge.tools.mbs_lookup import lookup_mbs_item, search_mbs_items
 from medibridge.tools.oshc_rules import query_oshc_rules
@@ -20,6 +21,7 @@ TOOLS = [
     calculate_oshc_coverage,
     check_waiting_period,
     query_oshc_rules,
+    search_clinics,
 ]
 
 

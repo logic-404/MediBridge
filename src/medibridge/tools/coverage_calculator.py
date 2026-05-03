@@ -12,6 +12,7 @@ import sqlite3
 from langchain_core.tools import tool
 
 from medibridge.data import db as dbmod
+from medibridge.data import queries
 from medibridge.models.coverage import CoverageResult
 
 # Keywords in insurer_exclusion_desc that indicate a service-level exclusion.
@@ -91,7 +92,7 @@ def _not_covered(item: dict, reason: str) -> CoverageResult:
 
 
 def _calculate(item_num: str, setting: str, conn: sqlite3.Connection) -> CoverageResult:
-    item = dbmod.get_item_by_number(conn, item_num)
+    item = queries.get_item_by_number(conn, item_num)
     if not item:
         raise ValueError(f"MBS item {item_num} not found")
 

@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 
 from medibridge.config import CHROMA_MBS_COLLECTION
 from medibridge.data import db as dbmod
+from medibridge.data import queries
 from medibridge.data.vectorstore import get_client, get_or_create_collection, query_mbs
 
 
@@ -28,7 +29,7 @@ def _hybrid_search(query: str, top_k: int = 5) -> list[dict]:
     # FTS5 results
     fts_scores: dict[str, float] = {}
     with dbmod.get_conn() as conn:
-        fts_rows = dbmod.search_items_by_keyword(conn, query, limit=20)
+        fts_rows = queries.search_items_by_keyword(conn, query, limit=20)
     for i, r in enumerate(fts_rows):
         item_num = r["item_num"]
         # rank is negative; rows ordered best-first. score = 1/(i+1)
@@ -47,7 +48,7 @@ def _hybrid_search(query: str, top_k: int = 5) -> list[dict]:
     out: list[dict] = []
     with dbmod.get_conn() as conn:
         for item_num in top_items:
-            row = dbmod.get_item_by_number(conn, item_num)
+            row = queries.get_item_by_number(conn, item_num)
             if row:
                 out.append(row)
     return out
@@ -64,4 +65,4 @@ def search_mbs_items(query: str, top_k: int = 5) -> list[dict]:
 def lookup_mbs_item(item_num: str) -> dict | None:
     """Look up a specific MBS item by its item number."""
     with dbmod.get_conn() as conn:
-        return dbmod.get_item_by_number(conn, str(item_num))
+        return queries.get_item_by_number(conn, str(item_num))

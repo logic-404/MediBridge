@@ -6,6 +6,7 @@ from datetime import date, datetime
 from langchain_core.tools import tool
 
 from medibridge.data import db as dbmod
+from medibridge.data import queries
 
 # Deed groups with NIL out-of-hospital waiting (Schedule 4)
 _NIL_OUTPATIENT_GROUPS = {"A1", "A2", "A22", "A23", "A46"}
@@ -48,7 +49,7 @@ def check_waiting_period(item_num: str, condition: str | None = None) -> dict:
                    "pregnancy", "psychiatric_hospital", "ambulance", "pharmaceutical"
     """
     with dbmod.get_conn() as conn:
-        item = dbmod.get_item_by_number(conn, str(item_num))
+        item = queries.get_item_by_number(conn, str(item_num))
         if not item:
             return {"error": f"item {item_num} not found"}
         cond_type = _classify(item, condition)

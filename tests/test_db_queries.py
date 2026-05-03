@@ -6,6 +6,13 @@ from pathlib import Path
 import pytest
 
 from medibridge.data import db as dbmod
+from medibridge.data import queries
+from medibridge.data.ingest.mbs import (
+    insert_imap_mappings,
+    insert_mbs_items,
+    populate_fts,
+    populate_lookup_tables,
+)
 from medibridge.models.mbs_item import IMAPMapping, MBSItem
 
 
@@ -30,7 +37,7 @@ def _seed(conn) -> None:
                 schedule_fee=16.95, benefit_85=14.45, benefit_75=12.75,
                 benefit_type="C", category="6", group_code="P1"),
     ]
-    dbmod.insert_mbs_items(conn, items)
+    insert_mbs_items(conn, items)
     mappings = [
         IMAPMapping(item_num="23", mapped_item="23", category_desc="PROFESSIONAL ATTENDANCES",
                     group_desc="GENERAL PRACTITIONER ATTENDANCES", btos_desc="Non-referred attendances GP/VR GP"),
@@ -41,14 +48,14 @@ def _seed(conn) -> None:
                     category_desc="PATHOLOGY SERVICES",
                     group_desc="HAEMATOLOGY", btos_desc="Pathology Tests"),
     ]
-    dbmod.insert_imap_mappings(conn, mappings)
-    dbmod.populate_lookup_tables(conn)
-    dbmod.populate_fts(conn)
+    insert_imap_mappings(conn, mappings)
+    populate_lookup_tables(conn)
+    populate_fts(conn)
 
 
 def test_get_item_by_number(conn) -> None:
     _seed(conn)
-    item = dbmod.get_item_by_number(conn, "23")
+    item = queries.get_item_by_number(conn, "23")
     assert item is not None
     assert item["schedule_fee"] == 43.90
     assert item["benefit_type"] == "E"
@@ -57,13 +64,13 @@ def test_get_item_by_number(conn) -> None:
 
 def test_fts5_blood_test(conn) -> None:
     _seed(conn)
-    rows = dbmod.search_items_by_keyword(conn, "blood test", limit=5)
+    rows = queries.search_items_by_keyword(conn, "blood test", limit=5)
     assert any(r["item_num"] == "73807" for r in rows)
 
 
 def test_fts5_populated(conn) -> None:
     _seed(conn)
-    assert dbmod.fts_count(conn) == 3
+    assert queries.fts_count(conn) == 3
 
 
 def test_lookup_tables_built(conn) -> None:

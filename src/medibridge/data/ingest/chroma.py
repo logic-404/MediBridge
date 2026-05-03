@@ -1,10 +1,5 @@
-"""Ingestion orchestrator.
-
-Run: python -m medibridge.data.ingest
-"""
+"""Embed MBS items + rule docs into ChromaDB."""
 from __future__ import annotations
-
-import argparse
 
 from rich.console import Console
 
@@ -13,21 +8,15 @@ from medibridge.config import (
     CHROMA_RULES_COLLECTION,
     DB_PATH,
     DEED_PDF_PATH,
-    IMAP_PATH,
     MBS_BOOK_PDF_PATH,
     MBS_ITEM_INFO_PDF_PATH,
-    MBS_XML_PATH,
-    ensure_data_dir,
     settings,
 )
 from medibridge.data import db as dbmod
-from medibridge.data.parse_imap import parse_imap
-from medibridge.data.parse_knowledge_md import parse_knowledge_md
-from medibridge.data.parse_mbs_book import parse_mbs_book
-from medibridge.data.parse_mbs_item_info import parse_mbs_item_info
-from medibridge.data.parse_mbs_xml import parse_mbs_xml
-from medibridge.data.parse_oshc_deed import parse_deed
-from medibridge.data.seed_insurers import seed_all
+from medibridge.data.parsers.knowledge_md import parse_knowledge_md
+from medibridge.data.parsers.mbs_book import parse_mbs_book
+from medibridge.data.parsers.mbs_item_info import parse_mbs_item_info
+from medibridge.data.parsers.oshc_deed import parse_deed
 from medibridge.data.vectorstore import (
     add_mbs_items,
     add_rule_chunks,
@@ -36,47 +25,6 @@ from medibridge.data.vectorstore import (
 )
 
 console = Console()
-
-
-def ingest_sqlite(reset: bool = True) -> dict:
-    if reset:
-        dbmod.reset_db(DB_PATH)
-    with dbmod.get_conn(DB_PATH) as conn:
-        dbmod.init_schema(conn)
-        console.print("[cyan]Parsing MBS XML...[/cyan]")
-        items = list(parse_mbs_xml(MBS_XML_PATH))
-        console.print(f"  {len(items)} active items")
-        dbmod.insert_mbs_items(conn, items)
-
-        console.print("[cyan]Parsing IMAP TSV...[/cyan]")
-        mappings = list(parse_imap(IMAP_PATH))
-        console.print(f"  {len(mappings)} mapping rows")
-        dbmod.insert_imap_mappings(conn, mappings)
-
-        console.print("[cyan]Populating lookup tables...[/cyan]")
-        dbmod.populate_lookup_tables(conn)
-
-        console.print("[cyan]Populating FTS5...[/cyan]")
-        n_fts = dbmod.populate_fts(conn)
-        console.print(f"  {n_fts} FTS rows")
-
-        console.print("[cyan]Seeding insurers...[/cyan]")
-        seed_all(conn)
-
-        console.print("[cyan]Inserting deed rules...[/cyan]")
-        dbmod.insert_deed_rules(conn)
-
-        cat_count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
-        grp_count = conn.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
-        btos_count = conn.execute("SELECT COUNT(*) FROM btos_types").fetchone()[0]
-        return {
-            "items": len(items),
-            "mappings": len(mappings),
-            "fts_rows": n_fts,
-            "categories": cat_count,
-            "groups": grp_count,
-            "btos": btos_count,
-        }
 
 
 def ingest_chroma(reset: bool = True) -> dict:
@@ -109,7 +57,7 @@ def ingest_chroma(reset: bool = True) -> dict:
     deed_chunks = parse_deed(DEED_PDF_PATH) if DEED_PDF_PATH.exists() else []
     book_chunks = parse_mbs_book(MBS_BOOK_PDF_PATH) if MBS_BOOK_PDF_PATH.exists() else []
     info_chunks = parse_mbs_item_info(MBS_ITEM_INFO_PDF_PATH) if MBS_ITEM_INFO_PDF_PATH.exists() else []
-    md_chunks   = parse_knowledge_md()
+    md_chunks = parse_knowledge_md()
     console.print(f"  deed={len(deed_chunks)} book={len(book_chunks)} info={len(info_chunks)} md={len(md_chunks)}")
 
     rules_coll = reset_collection(client, CHROMA_RULES_COLLECTION) if reset else \
@@ -122,25 +70,3 @@ def ingest_chroma(reset: bool = True) -> dict:
     console.print(f"  embedded {total_rules} rule chunks")
 
     return {"mbs_chunks": n_mbs, "rule_chunks": total_rules, "skipped": False}
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="MediBridge ingest")
-    parser.add_argument("--skip-chroma", action="store_true", help="SQLite only")
-    parser.add_argument("--no-reset", action="store_true", help="Append, don't reset")
-    args = parser.parse_args()
-
-    ensure_data_dir()
-    sql_stats = ingest_sqlite(reset=not args.no_reset)
-    console.print(f"[green]SQLite done:[/green] {sql_stats}")
-
-    if not args.skip_chroma:
-        chroma_stats = ingest_chroma(reset=not args.no_reset)
-        console.print(f"[green]Chroma done:[/green] {chroma_stats}")
-
-    db_size_mb = DB_PATH.stat().st_size / (1024 * 1024)
-    console.print(f"[bold]DB size: {db_size_mb:.1f} MB[/bold]")
-
-
-if __name__ == "__main__":
-    main()
