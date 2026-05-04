@@ -2,77 +2,96 @@
 
 **MediBridge** is an agentic RAG assistant for **Overseas Student Health Cover (OSHC)** in Australia. It answers natural-language questions about MBS items, insurer benefits, waiting periods, policy rules, and (for Queensland) clinic lookup. A **LangGraph** ReAct agent orchestrates tools over **SQLite** (structured MBS, insurers, clinics) and **ChromaDB** (semantic search over item text and policy chunks).
 
-You can use MediBridge via a **Rich terminal CLI**, a **web UI** (static SPA + streaming chat), or the **HTTP API** under `/api`.
+Available via a **Rich terminal CLI**, a **web UI** (static SPA + streaming chat), or the **HTTP API** under `/api`.
 
 ---
 
 ## Features
 
-- **Hybrid MBS search** - Reciprocal rank fusion of Chroma embeddings (60%) and SQLite FTS5 keyword search (40%); degrades to FTS-only if the vector store is unavailable.
-- **Coverage calculator** - IMAP eligibility gate, insurer exclusion keywords, benefit fields from MBS XML (with schedule-fee cap per deed), in-hospital 100%, anaesthesia and derived-fee handling.
-- **Waiting periods** - Tier-specific rules with deed defaults.
-- **Policy RAG** - `query_oshc_rules` over deed PDF, MBS book/item PDFs, and curated insurer markdown in Chroma.
-- **Clinic search (Queensland)** - Filter by postcode and/or suburb; optional clinic type and billing mode; data ingested from a bundled seed SQLite file.
+- **Hybrid MBS search** — Reciprocal rank fusion of Chroma embeddings (60%) and SQLite FTS5 keyword search (40%); degrades to FTS-only if the vector store is unavailable.
+- **Coverage calculator** — IMAP eligibility gate, insurer exclusion keywords, benefit fields from MBS XML (with schedule-fee cap per deed), in-hospital 100%, anaesthesia and derived-fee handling.
+- **Waiting periods** — Tier-specific rules with deed defaults.
+- **Policy RAG** — `query_oshc_rules` over deed PDF, MBS book/item PDFs, and curated insurer markdown in Chroma.
+- **Clinic search (Queensland)** — Filter by postcode and/or suburb; optional clinic type; data ingested from a bundled seed SQLite file.
+- **Parallel tool calling** — LangGraph agent issues multiple independent lookups concurrently in a single turn.
 
 ---
 
-## Requirements
+## Prerequisites
 
 - **Python 3.11+**
-- **OpenAI API key** - chat (`CHAT_MODEL` in `config.py`, currently `gpt-5-nano`) and embeddings (`text-embedding-3-small`) for the agent and Chroma ingest.
-- **Optional:** LangSmith env vars for tracing (see `.env.example`).
+- **OpenAI API key** — used for chat (`gpt-5-nano`) and embeddings (`text-embedding-3-small`)
+- **Optional:** LangSmith env vars for tracing (see `.env.example`)
 
-Work inside a virtual environment. Install the package in editable mode from the repository root:
+---
+
+## Installation
 
 ```bash
+# Create and activate a virtual environment
+python -m venv .venv
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+# macOS / Linux
+source .venv/bin/activate
+
+# Install in editable mode
 pip install -e .
-```
 
-For tests and building a wheel, install tooling separately (not declared in `pyproject.toml`):
-
-```bash
+# For tests and wheel builds (not declared in pyproject.toml)
 pip install pytest build
 ```
+
+> [!IMPORTANT]
+> Always activate the venv before running `medibridge`, `medibridge-cli`, or any `python -m medibridge.*` command. Never hardcode `.venv/Scripts/...` paths in scripts or configs.
 
 ---
 
 ## Configuration
 
-Copy `.env.example` to `.env` at the project root and set at least:
+Copy `.env.example` to `.env` and set at minimum:
 
 ```bash
 OPENAI_API_KEY=sk-...
 ```
 
-Optional LangSmith variables are documented in `.env.example`.
+Optional LangSmith tracing:
 
-Runtime paths are defined in `src/medibridge/config.py`: SQLite and Chroma live under `data/`, profile backup at `data/user_profile.json`, and raw seeds under `data/sources/` (for example `clinics_qld.db`).
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_pt_...
+LANGSMITH_PROJECT=medibridge
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
+
+Runtime paths (SQLite, Chroma, profile JSON, seed sources) are defined in `src/medibridge/config.py`.
 
 ---
 
 ## Data you must supply (`knowledge/`)
 
-The repository does **not** include government source files. Before ingestion, create a `knowledge/` directory at the repo root with (paths must match `config.py`):
+The repository does **not** include government source files. Before ingestion, create a `knowledge/` directory at the repo root:
 
 | Path | Purpose |
 |------|---------|
 | `knowledge/data/MBS-XML-20260301-version 2.XML` | MBS XML export |
 | `knowledge/data/20260301_MBSONLINE_IMAP.TXT` | IMAP TSV (Windows-1252) |
 | `knowledge/documents/deed-for-the-provision-of-overseas-student-health-cover-1-july-2025.pdf` | OSHC deed |
-| `knowledge/documents/MBS Book - March 2026.pdf` | MBS book (explanatory pages ingested per config) |
+| `knowledge/documents/MBS Book - March 2026.pdf` | MBS book |
 | `knowledge/documents/MBS Item Information.pdf` | Item information PDF |
 | `knowledge/insurers/` | Per-insurer markdown (and comparisons if present) |
 | `knowledge/reference/` | Additional reference markdown for rules embedding |
 
-Place **`data/sources/clinics_qld.db`** in the repo (read-only seed) so clinic ingestion can run; if the file is missing, ingest continues and prints a skip message for clinics.
+Place **`data/sources/clinics_qld.db`** in the repo so clinic ingestion can run; if missing, ingest continues and prints a skip message.
 
-Generated artifacts (`data/medibridge.db`, `data/chroma/`, local profile JSON) are gitignored.
+Generated artifacts (`data/medibridge.db`, `data/chroma/`, profile JSON) are gitignored.
 
 ---
 
 ## Ingestion
 
-After `knowledge/` (and optionally `data/sources/clinics_qld.db`) are in place, run:
+After `knowledge/` is in place, run:
 
 ```bash
 python -m medibridge.data.ingest
@@ -80,14 +99,15 @@ python -m medibridge.data.ingest
 
 | Flag | Effect |
 |------|--------|
-| `--skip-chroma` | SQLite (and clinics) only; no embeddings |
-| `--no-reset` | Do not reset the database before writing (append-oriented re-run) |
+| `--skip-chroma` | SQLite and clinics only; no embeddings |
+| `--no-reset` | Do not reset DB before writing (append-oriented re-run) |
 
-Chroma ingestion **requires** `OPENAI_API_KEY`. If it is unset, the pipeline skips vector indexing and prints a warning.
+> [!NOTE]
+> Chroma ingestion requires `OPENAI_API_KEY`. If unset, vector indexing is skipped with a warning.
 
 ---
 
-## Running MediBridge
+## Usage
 
 ### Web app
 
@@ -95,7 +115,7 @@ Chroma ingestion **requires** `OPENAI_API_KEY`. If it is unset, the pipeline ski
 medibridge
 ```
 
-Starts **Uvicorn** on **http://localhost:8000** with reload enabled: the **React SPA** is served from `ui/`, and JSON routes are mounted under **`/api`** (for example chat, profile, insurers, MBS helpers, coverage, clinics).
+Starts **Uvicorn** on **http://localhost:8000**. The React SPA is served from `ui/`; JSON routes are mounted under `/api` (chat, profile, insurers, MBS helpers, coverage, clinics).
 
 ### CLI
 
@@ -105,19 +125,22 @@ medibridge-cli
 python -m medibridge.cli
 ```
 
-The CLI checks that `data/medibridge.db` exists and that `OPENAI_API_KEY` is set. On first use it runs an onboarding wizard (insurer, tier, policy start date, cover type). Commands: `/quit`, `/reset`, `/item <num>`, `/profile`.
+On first use, runs an onboarding wizard (insurer, tier, policy start date, cover type). Commands: `/quit`, `/reset`, `/item <num>`, `/profile`.
 
 ### Docker
 
-Build the image (no frontend build step needed — SPA uses CDN React):
-
 ```bash
+# Build
 docker build -t medibridge .
-```
 
-Run, mounting pre-ingested data and your knowledge sources:
+# Ingest inside container (first time)
+docker run --rm \
+  -e OPENAI_API_KEY=sk-... \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/knowledge:/app/knowledge" \
+  medibridge python -m medibridge.data.ingest
 
-```bash
+# Run server
 docker run \
   -e OPENAI_API_KEY=sk-... \
   -v "$(pwd)/data:/app/data" \
@@ -126,34 +149,35 @@ docker run \
   medibridge
 ```
 
-The `data/` volume must contain an already-ingested `medibridge.db` (and optionally `chroma/`). To ingest inside the container first:
+> [!NOTE]
+> The `data/` volume must contain an already-ingested `medibridge.db` (and optionally `chroma/`) before starting the server.
 
-```bash
-docker run --rm \
-  -e OPENAI_API_KEY=sk-... \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/knowledge:/app/knowledge" \
-  medibridge python -m medibridge.data.ingest
+---
+
+## Architecture
+
+Dual-store agentic RAG: SQLite for structured data, ChromaDB for semantic search. LangGraph drives a ReAct loop over six tools.
+
+```
+CLI (cli.py + onboarding.py)
+  └─> LangGraph ReAct agent (agent/graph.py)
+        └─> 6 LangChain @tools (tools/)
+              ├─> SQLite: mbs_items, insurer_tiers, oshc_coverage_rules, clinics
+              └─> ChromaDB: mbs_descriptions, oshc_rules
 ```
 
-Then start the server with the run command above.
+### Agent tools
 
----
+| Tool | Description |
+|------|-------------|
+| `search_mbs_items` | Hybrid RRF search (vector + FTS5) |
+| `lookup_mbs_item` | Exact item lookup by number |
+| `calculate_oshc_coverage` | Out-of-pocket cost estimate |
+| `check_waiting_period` | Waiting months / served status |
+| `query_oshc_rules` | Semantic policy retrieval |
+| `search_clinics` | Queensland clinic directory |
 
-## Agent tools
-
-The LangGraph agent binds **six** LangChain tools with **parallel tool calling enabled** — when the model issues multiple independent lookups in one turn, they execute concurrently:
-
-1. `search_mbs_items` - hybrid search
-2. `lookup_mbs_item` - exact item by number
-3. `calculate_oshc_coverage` - out-of-pocket estimate
-4. `check_waiting_period` - waiting months / served status
-5. `query_oshc_rules` - semantic policy retrieval
-6. `search_clinics` - Queensland clinic directory
-
----
-
-## Project layout
+### Project layout
 
 ```
 MediBridge/
@@ -171,12 +195,12 @@ MediBridge/
       ingest/           pipeline, mbs, insurers, chroma, clinics, ...
   ui/                   Static SPA (mounted by FastAPI)
   tests/
-  knowledge/            Not committed; you provide sources
+  knowledge/            Not committed — you provide sources
   data/                 Gitignored runtime DB, Chroma, profile
   pyproject.toml
   .env.example
-  ARCHITECTURE.md       Deeper design (some paths may lag code)
-  CLAUDE.md             Maintainer conventions for this repo
+  ARCHITECTURE.md       Deeper design notes
+  CLAUDE.md             Maintainer conventions
 ```
 
 ---
@@ -187,7 +211,7 @@ MediBridge/
 python -m pytest tests/ -v
 ```
 
-Notable modules under `tests/`: coverage calculator golden cases, MBS XML parsing, DB queries, clinic search.
+Coverage includes: coverage calculator golden cases, MBS XML parsing, DB queries, clinic search.
 
 ---
 
@@ -203,11 +227,10 @@ Output goes to `dist/`.
 
 ## Further reading
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - data pipeline, schema overview, coverage logic, insurer seeding (treat layout/file names as conceptual where they differ from `src/medibridge/data/`).
-- **[CLAUDE.md](CLAUDE.md)** - venv usage, commands, and how to extend ingestion.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — data pipeline, schema overview, coverage logic, insurer seeding.
+- **[CLAUDE.md](CLAUDE.md)** — venv usage, commands, and how to extend ingestion.
 
 ---
 
-## Disclaimer
-
-MediBridge is for **informational** use only. Always confirm coverage, fees, and waiting periods with your insurer and care providers.
+> [!WARNING]
+> MediBridge is for **informational use only**. Always confirm coverage, fees, and waiting periods directly with your insurer and care providers.
