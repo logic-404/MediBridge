@@ -1,19 +1,21 @@
 """CLI onboarding flow."""
 from __future__ import annotations
 
-import json
 from datetime import datetime
 
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 
-from medibridge.config import USER_PROFILE_JSON
 from medibridge.data import db as dbmod
+from medibridge.profile import COVER_TYPES as _COVER_TYPES_TUPLE
+from medibridge.profile import has_profile, save_profile
 
 console = Console()
 
-COVER_TYPES = ["single", "couple", "family", "sole_parent"]
+COVER_TYPES = list(_COVER_TYPES_TUPLE)
+
+__all__ = ["has_profile", "run_onboarding", "COVER_TYPES"]
 
 
 def _list_insurers(conn) -> list[dict]:
@@ -29,29 +31,6 @@ def _list_tiers(conn, insurer_id: str) -> list[dict]:
         (insurer_id,),
     ).fetchall()
     return [dict(r) for r in rows]
-
-
-def _save_profile(tier_id: str, cover_type: str, policy_start: str) -> None:
-    with dbmod.get_conn() as conn:
-        conn.execute("DELETE FROM user_profile")
-        conn.execute(
-            "INSERT INTO user_profile (id, tier_id, cover_type, policy_start_date) VALUES (1, ?, ?, ?)",
-            (tier_id, cover_type, policy_start),
-        )
-    USER_PROFILE_JSON.parent.mkdir(parents=True, exist_ok=True)
-    USER_PROFILE_JSON.write_text(
-        json.dumps({"tier_id": tier_id, "cover_type": cover_type, "policy_start_date": policy_start}),
-        encoding="utf-8",
-    )
-
-
-def has_profile() -> bool:
-    try:
-        with dbmod.get_conn() as conn:
-            row = conn.execute("SELECT 1 FROM user_profile WHERE id = 1").fetchone()
-        return row is not None
-    except Exception:
-        return False
 
 
 def run_onboarding() -> None:
@@ -97,5 +76,5 @@ def run_onboarding() -> None:
 
     cover = Prompt.ask("Cover type", choices=COVER_TYPES, default="single")
 
-    _save_profile(tier["tier_id"], cover, date_str)
+    save_profile(tier["tier_id"], cover, date_str)
     console.print(f"\n[green]Profile saved.[/green] {insurer['insurer_name']} / {tier['tier_name']} / {cover} / {date_str}\n")

@@ -2,7 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Conventions
+
+- **Always run inside the project venv.** Activate first (`.venv\Scripts\Activate.ps1` on Windows PowerShell, `source .venv/bin/activate` on POSIX), then call `python`/`pip`/`medibridge`/`medibridge-api` as plain commands. The `.venv/` directory is gitignored — never hardcode `.venv/Scripts/...` paths in scripts, configs, or docs that get committed.
+
 ## Commands
+
+(Activate the venv first.)
 
 ```bash
 # Install
@@ -10,6 +16,9 @@ pip install -e .
 
 # Run CLI
 python -m medibridge        # or: medibridge
+
+# Run web app (FastAPI + mounted SPA)
+medibridge-api              # uvicorn on http://localhost:8000
 
 # Ingest data (one-time after clone — requires knowledge/ directory)
 python -m medibridge.data.ingest

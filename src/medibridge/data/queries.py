@@ -62,17 +62,22 @@ def fts_count(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM mbs_fts").fetchone()[0]
 
 
+ALLOWED_BILLING = {"bulk", "mixed", "private", "unknown"}
+
+
 def search_clinics(
     conn: sqlite3.Connection,
     postcode: str | None = None,
     suburb: str | None = None,
     clinic_type: str | None = None,
+    billing: str | None = None,
     limit: int = 10,
 ) -> list[dict]:
-    """Filter clinics by postcode and/or suburb, with optional type filter.
+    """Filter clinics by postcode and/or suburb, with optional type and billing filters.
 
     `type` column stores comma-separated multi-values (e.g. 'GP, Pharmacy').
     Type match wraps the column with commas to avoid Psych* substring collisions.
+    `billing` is a single-value column: bulk | mixed | private | unknown.
     """
     if not postcode and not suburb:
         return []
@@ -87,7 +92,16 @@ def search_clinics(
     if clinic_type:
         where.append("',' || REPLACE(type, ', ', ',') || ',' LIKE ?")
         params.append(f"%,{clinic_type},%")
-    sql = f"SELECT * FROM clinics WHERE {' AND '.join(where)} LIMIT ?"
+    if billing:
+        where.append("LOWER(billing) = ?")
+        params.append(billing.strip().lower())
+    # bulk billing first (best for OSHC users), then mixed, then private/unknown
+    sql = (
+        f"SELECT * FROM clinics WHERE {' AND '.join(where)} "
+        "ORDER BY CASE LOWER(billing) "
+        "WHEN 'bulk' THEN 0 WHEN 'mixed' THEN 1 WHEN 'private' THEN 2 ELSE 3 END "
+        "LIMIT ?"
+    )
     params.append(limit)
     rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

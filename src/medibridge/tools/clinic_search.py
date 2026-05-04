@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 
 from medibridge.data import db as dbmod
 from medibridge.data import queries
-from medibridge.data.queries import ALLOWED_CLINIC_TYPES
+from medibridge.data.queries import ALLOWED_BILLING, ALLOWED_CLINIC_TYPES
 
 _DROP_FIELDS = {"phone", "hours", "latitude", "longitude"}
 
@@ -15,6 +15,7 @@ def search_clinics(
     postcode: str | None = None,
     suburb: str | None = None,
     clinic_type: str | None = None,
+    billing: str | None = None,
 ) -> list[dict]:
     """Find Queensland clinics, pharmacies, or hospitals by postcode or suburb.
 
@@ -22,16 +23,21 @@ def search_clinics(
         postcode: 4-digit Australian postcode (e.g. "4000"). Provide this OR suburb.
         suburb: Suburb name (e.g. "Brisbane City"). Provide this OR postcode.
         clinic_type: Optional filter. One of: GP, Psychology, Pharmacy, Psychiatry, Hospital.
+        billing: Optional filter. One of: bulk, mixed, private, unknown.
+                 OSHC students typically prefer "bulk" (no out-of-pocket cost).
 
-    Returns up to 10 clinics with name, address, suburb, postcode, type, billing.
-    Phone numbers and coordinates are not in the dataset. Coverage: Queensland only.
+    Returns up to 10 clinics with name, address, suburb, postcode, type, billing —
+    sorted bulk-billing first. Phone numbers and coordinates are not in the dataset.
+    Coverage: Queensland only.
     """
     if not postcode and not suburb:
         return [{"error": "Provide postcode or suburb."}]
     if clinic_type and clinic_type not in ALLOWED_CLINIC_TYPES:
         return [{"error": f"clinic_type must be one of {sorted(ALLOWED_CLINIC_TYPES)}"}]
+    if billing and billing.lower() not in ALLOWED_BILLING:
+        return [{"error": f"billing must be one of {sorted(ALLOWED_BILLING)}"}]
     with dbmod.get_conn() as conn:
-        rows = queries.search_clinics(conn, postcode, suburb, clinic_type)
+        rows = queries.search_clinics(conn, postcode, suburb, clinic_type, billing)
     if not rows:
         return [{"error": "No clinics found.", "postcode": postcode, "suburb": suburb,
                  "clinic_type": clinic_type}]

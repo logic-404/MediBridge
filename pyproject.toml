@@ -17,10 +17,14 @@ dependencies = [
     "python-dotenv>=1.0",
     "rich>=13.7",
     "pymupdf>=1.24",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
 ]
 
 [project.scripts]
 medibridge = "medibridge.cli:main"
+medibridge-api = "medibridge.api.main:run"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
