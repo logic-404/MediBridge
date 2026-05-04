@@ -38,6 +38,24 @@ def search_items_by_keyword(conn: sqlite3.Connection, query: str, limit: int = 1
     return [dict(r) for r in rows]
 
 
+def search_items_by_num_prefix(conn: sqlite3.Connection, prefix: str, limit: int = 10) -> list[dict]:
+    rows = conn.execute(
+        """SELECT m.*,
+               (SELECT category_desc FROM imap_mappings WHERE mapped_item = m.item_num
+                AND category_desc IS NOT NULL LIMIT 1) AS category_desc,
+               (SELECT group_desc FROM imap_mappings WHERE mapped_item = m.item_num
+                AND group_desc IS NOT NULL LIMIT 1) AS group_desc,
+               (SELECT btos_desc FROM imap_mappings WHERE mapped_item = m.item_num
+                AND btos_desc IS NOT NULL LIMIT 1) AS btos_desc
+        FROM mbs_items m
+        WHERE m.item_num LIKE ? AND m.item_end_date IS NULL
+        ORDER BY CAST(m.item_num AS INTEGER)
+        LIMIT ?""",
+        (f"{prefix}%", limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_items_by_category(conn: sqlite3.Connection, category: str) -> list[dict]:
     rows = conn.execute(
         "SELECT item_num, description, schedule_fee FROM mbs_items "

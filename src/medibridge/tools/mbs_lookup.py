@@ -9,7 +9,30 @@ from medibridge.data import queries
 from medibridge.data.vectorstore import get_client, get_or_create_collection, query_mbs
 
 
+def _numeric_search(query: str, top_k: int = 5) -> list[dict]:
+    """Exact + prefix match on item_num for purely numeric queries."""
+    prefix = query.lstrip("0") or "0"
+    with dbmod.get_conn() as conn:
+        exact = queries.get_item_by_number(conn, prefix)
+        prefix_rows = queries.search_items_by_num_prefix(conn, prefix, limit=top_k + 1)
+    seen: set[str] = set()
+    out: list[dict] = []
+    if exact:
+        out.append(exact)
+        seen.add(exact["item_num"])
+    for row in prefix_rows:
+        if row["item_num"] not in seen:
+            out.append(row)
+            seen.add(row["item_num"])
+        if len(out) >= top_k:
+            break
+    return out
+
+
 def _hybrid_search(query: str, top_k: int = 5) -> list[dict]:
+    if query.strip().isdigit():
+        return _numeric_search(query.strip(), top_k)
+
     # Vector results
     try:
         client = get_client()

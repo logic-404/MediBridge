@@ -2,7 +2,7 @@
 function CostCalc({ profile }) {
   const [view, setView] = useState('list');
   const [items, setItems] = useState([]); // each: server item + uid + setting + coverage{benefit,pct,notes,is_covered}
-  const [totalCharge, setTotalCharge] = useState(0);
+  const [totalCharge, setTotalCharge] = useState(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -57,10 +57,16 @@ function CostCalc({ profile }) {
 
   const perItem = items.map(it => {
     const cov = it.coverage || {};
+    const schedule = cov.schedule_fee ?? it.schedule_fee ?? 0;
+    const benefit = cov.oshc_benefit ?? 0;
+    const oopRaw = cov.estimated_out_of_pocket;
+    const oop = oopRaw == null ? null : oopRaw;
     return {
       it,
-      schedule: cov.schedule_fee ?? it.schedule_fee ?? 0,
-      benefit: cov.oshc_benefit ?? 0,
+      schedule,
+      benefit,
+      oop,
+      oopFallback: oop == null ? Math.max(schedule - benefit, 0) : oop,
       pct: cov.benefit_pct ?? 0,
       isCovered: cov.is_covered !== false,
       notes: cov.notes || [],
@@ -70,9 +76,24 @@ function CostCalc({ profile }) {
   });
   const totalSchedule = perItem.reduce((s, x) => s + (x.schedule || 0), 0);
   const totalBenefit = perItem.reduce((s, x) => s + (x.benefit || 0), 0);
-  const cappedBenefit = Math.min(totalBenefit, totalCharge);
-  const gap = Math.max(totalCharge - cappedBenefit, 0);
-  const aboveSchedule = totalCharge > totalSchedule && totalSchedule > 0;
+  const totalItemOOP = perItem.reduce((s, x) => s + (x.oopFallback || 0), 0);
+  const hasCharge = totalCharge != null && totalCharge > 0;
+  const mode = hasCharge ? 'actual' : 'estimated';
+  const derivedFeeCount = perItem.filter(x => !x.loading && !x.error && x.oop == null).length;
+  const anaesCount = perItem.filter(x => (x.it.benefit_type || '').toUpperCase() === 'A').length;
+
+  let cappedBenefit, gap;
+  if (!hasCharge) {
+    cappedBenefit = totalBenefit;
+    gap = totalItemOOP;
+  } else if (totalCharge >= totalSchedule) {
+    cappedBenefit = totalBenefit;
+    gap = Math.max(totalCharge - totalBenefit, 0);
+  } else {
+    cappedBenefit = Math.min(totalBenefit, totalCharge);
+    gap = Math.max(totalCharge - cappedBenefit, 0);
+  }
+  const aboveSchedule = hasCharge && totalCharge > totalSchedule && totalSchedule > 0;
   useEffect(() => {
     const from = displayGap;
     const to = gap;
@@ -187,6 +208,11 @@ function CostCalc({ profile }) {
                               {row.loading ? '…' : (row.error ? 'error' : fmtAUD(row.benefit))}
                             </span>
                           </span>
+                          <span style={{ color: MB.inkSubtle }}>
+                            Gap: <span style={{ color: (row.oopFallback || 0) > 0 ? 'oklch(48% 0.13 75)' : MB.ok, fontWeight: 600 }}>
+                              {row.loading ? '…' : (row.error ? '—' : (row.oop == null ? '—' : fmtAUD(row.oopFallback)))}
+                            </span>
+                          </span>
                         </div>
                         {row.notes.length > 0 && (
                           <div style={{ marginTop: 6, fontFamily: MB.sans, fontSize: 11, color: MB.inkMuted, lineHeight: 1.4 }}>
@@ -213,7 +239,7 @@ function CostCalc({ profile }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', background: MB.bg, border: `1px solid ${aboveSchedule ? 'oklch(72% 0.13 75)' : MB.border}`, borderRadius: 12, padding: '0 14px', height: 52 }}>
                 <span style={{ fontFamily: MB.sans, fontSize: 18, color: MB.inkSubtle, marginRight: 4 }}>$</span>
-                <input type="number" step="0.01" min="0" placeholder="0.00" value={totalCharge} onChange={e => setTotalCharge(parseFloat(e.target.value) || 0)} style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: MB.mono, fontSize: 22, fontWeight: 700, color: MB.ink, width: '100%' }} />
+                <input type="number" step="0.01" min="0" placeholder="0.00" value={totalCharge ?? ''} onChange={e => { const v = e.target.value; setTotalCharge(v === '' ? null : (parseFloat(v) || 0)); }} style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: MB.mono, fontSize: 22, fontWeight: 700, color: MB.ink, width: '100%' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontFamily: MB.mono, fontSize: 11, color: MB.inkSubtle }}>
                 <span>Total schedule fee</span>
@@ -227,14 +253,32 @@ function CostCalc({ profile }) {
             </div>
 
             <div style={{ padding: '0 4px 8px', fontFamily: MB.mono, fontSize: 11, color: MB.inkSubtle, letterSpacing: 0.4, textTransform: 'uppercase' }}>
-              <span style={{ color: MB.accentInk, marginRight: 6 }}>3</span>Estimated breakdown
+              <span style={{ color: MB.accentInk, marginRight: 6 }}>3</span>{mode === 'estimated' ? 'Estimated breakdown (at MBS schedule rate)' : 'Estimated breakdown'}
             </div>
             <div style={{ background: MB.surface, border: `1px solid ${MB.border}`, borderRadius: 14, padding: '14px 16px' }}>
-              <BreakdownRow label="Total clinic charge" value={fmtAUD(totalCharge)} />
+              <BreakdownRow label={mode === 'estimated' ? 'Total schedule fee' : 'Total clinic charge'} value={fmtAUD(mode === 'estimated' ? totalSchedule : totalCharge)} />
               <div style={{ height: 1, background: MB.border, margin: '8px 0' }} />
               <BreakdownRow label="OSHC covers" value={`− ${fmtAUD(cappedBenefit)}`} sub={`Sum of benefits across ${items.length} item${items.length !== 1 ? 's' : ''}`} accent="ok" />
               <div style={{ height: 1, background: MB.border, margin: '8px 0' }} />
-              <BreakdownRow label="Your gap" value={fmtAUD(gap)} sub={gap > 0 ? 'Out of pocket' : 'Fully covered'} accent={gap > 0 ? 'warn' : 'ok'} bold />
+              <BreakdownRow
+                label="Your gap"
+                value={fmtAUD(gap)}
+                sub={mode === 'estimated'
+                  ? (gap > 0 ? 'Estimated — enter clinic total for actual gap' : (totalItemOOP === 0 ? 'Fully covered' : 'Estimated — enter clinic total for actual gap'))
+                  : (gap > 0 ? 'Out of pocket' : 'Fully covered')}
+                accent={gap > 0 ? 'warn' : 'ok'}
+                bold
+              />
+              {derivedFeeCount > 0 && (
+                <div style={{ marginTop: 10, padding: '8px 10px', background: MB.warnSoft, borderRadius: 8, fontFamily: MB.sans, fontSize: 11.5, color: 'oklch(40% 0.12 75)', lineHeight: 1.45 }}>
+                  {derivedFeeCount} item{derivedFeeCount !== 1 ? 's have' : ' has'} no automatic estimate — see notes. Totals understate the real gap.
+                </div>
+              )}
+              {mode === 'estimated' && anaesCount > 0 && (
+                <div style={{ marginTop: 10, padding: '8px 10px', background: MB.warnSoft, borderRadius: 8, fontFamily: MB.sans, fontSize: 11.5, color: 'oklch(40% 0.12 75)', lineHeight: 1.45 }}>
+                  Includes time-based anaesthesia items — actual cost varies with duration.
+                </div>
+              )}
             </div>
           </>
         )}
@@ -244,8 +288,12 @@ function CostCalc({ profile }) {
         <div style={{ position: 'absolute', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)', left: 0, right: 0, zIndex: 20, padding: '14px 16px', background: 'rgba(255,255,255,0.9)', borderTop: `1px solid ${MB.border}`, boxShadow: MB.shadowLg, backdropFilter: 'saturate(180%) blur(12px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div>
-              <div style={{ fontFamily: MB.sans, fontSize: 12, color: MB.inkMuted }}>Estimated out‑of‑pocket</div>
-              <div style={{ fontFamily: MB.mono, fontSize: 11, color: MB.inkSubtle, marginTop: 2 }}>{fmtAUD(totalCharge)} − {fmtAUD(cappedBenefit)} covered</div>
+              <div style={{ fontFamily: MB.sans, fontSize: 12, color: MB.inkMuted }}>{mode === 'estimated' ? 'Estimated gap (schedule rate)' : 'Estimated out‑of‑pocket'}</div>
+              <div style={{ fontFamily: MB.mono, fontSize: 11, color: MB.inkSubtle, marginTop: 2 }}>
+                {mode === 'estimated'
+                  ? `Sum of per-item gaps across ${items.length} item${items.length !== 1 ? 's' : ''}`
+                  : `${fmtAUD(totalCharge)} − ${fmtAUD(cappedBenefit)} covered`}
+              </div>
             </div>
             <div style={{ fontFamily: MB.mono, fontSize: 30, fontWeight: 700, color: gap > 0 ? 'oklch(48% 0.13 75)' : MB.ok, letterSpacing: -0.6 }}>{fmtAUD(displayGap)}</div>
           </div>
