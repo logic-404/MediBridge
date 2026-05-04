@@ -27,7 +27,7 @@ TOOLS = [
 
 def build_graph():
     llm = ChatOpenAI(model=CHAT_MODEL, api_key=settings.openai_api_key)
-    llm_with_tools = llm.bind_tools(TOOLS)
+    llm_with_tools = llm.bind_tools(TOOLS, parallel_tool_calls=True)
 
     def agent_node(state: MediBridgeState) -> dict:
         msgs = state["messages"]

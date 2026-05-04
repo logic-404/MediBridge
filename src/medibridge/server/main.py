@@ -7,10 +7,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from medibridge.agent.graph import build_graph
-from medibridge.api.routes import chat, clinics, coverage, insurers, mbs, profile
+from medibridge.server.routes import chat, clinics, coverage, insurers, mbs, profile
 from medibridge.config import DB_PATH, ROOT_DIR, settings
 
-WEB_DIR = ROOT_DIR / "web"
+WEB_DIR = ROOT_DIR / "ui"
 
 
 @asynccontextmanager
@@ -46,7 +46,7 @@ if WEB_DIR.exists():
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("medibridge.api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("medibridge.server.main:app", host="0.0.0.0", port=8000, reload=True)
 
 
 if __name__ == "__main__":

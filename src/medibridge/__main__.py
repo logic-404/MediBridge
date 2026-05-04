@@ -1,4 +1,4 @@
-from medibridge.cli import main
+from medibridge.server.main import run
 
 if __name__ == "__main__":
-    main()
+    run()

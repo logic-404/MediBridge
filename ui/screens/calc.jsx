@@ -167,7 +167,7 @@ function CostCalc({ profile }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <span style={{ fontFamily: MB.mono, fontSize: 11, fontWeight: 600, color: MB.accentInk, background: MB.accentSoft, padding: '2px 7px', borderRadius: 6 }}>MBS {row.it.item_num}</span>
                           <Tag kind="neutral" size="xs">{isGp ? 'GP' : 'Specialist'}</Tag>
-                          {row.coverage && row.isCovered === false && <Tag kind="bad" size="xs">Not covered</Tag>}
+                          {!row.loading && row.isCovered === false && <Tag kind="bad" size="xs">Not covered</Tag>}
                         </div>
                         <div style={{ fontFamily: MB.sans, fontSize: 13, color: MB.ink, lineHeight: 1.35, fontWeight: 550, marginBottom: 6 }}>{row.it.description}</div>
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from medibridge.api.schemas import CoverageRequest
+from medibridge.server.schemas import CoverageRequest
 from medibridge.tools.coverage_calculator import calculate_oshc_coverage
 
 router = APIRouter()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
-from medibridge.api.schemas import ProfileSavePayload
+from medibridge.server.schemas import ProfileSavePayload
 from medibridge.profile import clear_profile, load_profile, save_profile
 
 router = APIRouter()

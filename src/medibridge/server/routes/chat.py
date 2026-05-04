@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sse_starlette.sse import EventSourceResponse
 
-from medibridge.api.schemas import ChatRequest
+from medibridge.server.schemas import ChatRequest
 
 router = APIRouter()
 

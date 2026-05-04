@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.scripts]
-medibridge = "medibridge.cli:main"
-medibridge-api = "medibridge.api.main:run"
+medibridge = "medibridge.server.main:run"
+medibridge-cli = "medibridge.cli:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

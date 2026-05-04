@@ -89,29 +89,60 @@ Chroma ingestion **requires** `OPENAI_API_KEY`. If it is unset, the pipeline ski
 
 ## Running MediBridge
 
-### CLI
+### Web app
 
 ```bash
 medibridge
+```
+
+Starts **Uvicorn** on **http://localhost:8000** with reload enabled: the **React SPA** is served from `ui/`, and JSON routes are mounted under **`/api`** (for example chat, profile, insurers, MBS helpers, coverage, clinics).
+
+### CLI
+
+```bash
+medibridge-cli
 # or
-python -m medibridge
+python -m medibridge.cli
 ```
 
 The CLI checks that `data/medibridge.db` exists and that `OPENAI_API_KEY` is set. On first use it runs an onboarding wizard (insurer, tier, policy start date, cover type). Commands: `/quit`, `/reset`, `/item <num>`, `/profile`.
 
-### Web app + API
+### Docker
+
+Build the image (no frontend build step needed — SPA uses CDN React):
 
 ```bash
-medibridge-api
+docker build -t medibridge .
 ```
 
-This starts **Uvicorn** on **http://localhost:8000** with reload enabled: the **React SPA** is served from `web/`, and JSON routes are mounted under **`/api`** (for example chat, profile, insurers, MBS helpers, coverage, clinics).
+Run, mounting pre-ingested data and your knowledge sources:
+
+```bash
+docker run \
+  -e OPENAI_API_KEY=sk-... \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/knowledge:/app/knowledge" \
+  -p 8000:8000 \
+  medibridge
+```
+
+The `data/` volume must contain an already-ingested `medibridge.db` (and optionally `chroma/`). To ingest inside the container first:
+
+```bash
+docker run --rm \
+  -e OPENAI_API_KEY=sk-... \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/knowledge:/app/knowledge" \
+  medibridge python -m medibridge.data.ingest
+```
+
+Then start the server with the run command above.
 
 ---
 
 ## Agent tools
 
-The LangGraph agent binds **six** LangChain tools:
+The LangGraph agent binds **six** LangChain tools with **parallel tool calling enabled** — when the model issues multiple independent lookups in one turn, they execute concurrently:
 
 1. `search_mbs_items` - hybrid search
 2. `lookup_mbs_item` - exact item by number
@@ -130,7 +161,7 @@ MediBridge/
     cli.py              Rich REPL
     onboarding.py       Profile wizard (CLI)
     config.py           Paths, settings, models
-    api/                FastAPI app, routers, schemas
+    server/             FastAPI app, routers, schemas
     agent/              graph.py, prompts.py, state
     tools/              LangChain @tool implementations
     models/             Pydantic models
@@ -138,7 +169,7 @@ MediBridge/
       db.py, schema.py, queries.py, vectorstore.py
       parsers/          mbs_xml, imap, PDFs, knowledge_md, ...
       ingest/           pipeline, mbs, insurers, chroma, clinics, ...
-  web/                  Static SPA (mounted by FastAPI)
+  ui/                   Static SPA (mounted by FastAPI)
   tests/
   knowledge/            Not committed; you provide sources
   data/                 Gitignored runtime DB, Chroma, profile
