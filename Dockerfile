@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY web/ ./web/
+COPY ui/ ./ui/
 
 RUN pip install --no-cache-dir .
 
@@ -14,4 +14,4 @@ VOLUME ["/app/data", "/app/knowledge"]
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["medibridge-api"]
+CMD ["medibridge"]
