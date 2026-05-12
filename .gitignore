@@ -3,7 +3,7 @@
 __pycache__/
 *.pyc
 *.egg-info/
-data/medibridge.db
+data/chroma/
 data/user_profile.json
 .pytest_cache/
 build/
