@@ -10,8 +10,6 @@ RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 
-VOLUME ["/app/data", "/app/knowledge"]
-
 ENV PYTHONUNBUFFERED=1
 
 CMD ["medibridge"]
