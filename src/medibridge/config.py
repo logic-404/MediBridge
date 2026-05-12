@@ -6,9 +6,9 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-KNOWLEDGE_DIR = ROOT_DIR / "knowledge"
-DATA_DIR = ROOT_DIR / "data"
+ROOT_DIR = Path(os.environ["MEDIBRIDGE_ROOT"]) if "MEDIBRIDGE_ROOT" in os.environ else Path(__file__).resolve().parents[2]
+KNOWLEDGE_DIR = Path(os.environ.get("MEDIBRIDGE_KNOWLEDGE_DIR", ROOT_DIR / "knowledge"))
+DATA_DIR = Path(os.environ.get("MEDIBRIDGE_DATA_DIR", ROOT_DIR / "data"))
 
 DB_PATH = DATA_DIR / "medibridge.db"
 CHROMA_DIR = DATA_DIR / "chroma"

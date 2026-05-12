@@ -65,7 +65,7 @@ CLI (cli.py + onboarding.py)
 
 | Module | Role |
 |--------|------|
-| `config.py` | Paths (incl. `CLINICS_SOURCE_PATH`), env vars (pydantic-settings), model names (`CHAT_MODEL = "gpt-5-nano"`, `EMBEDDING_MODEL = "text-embedding-3-small"`) |
+| `config.py` | Paths (incl. `CLINICS_SOURCE_PATH`), env vars (pydantic-settings), model names (`CHAT_MODEL = "gpt-5-nano"`, `EMBEDDING_MODEL = "text-embedding-3-small"`). `ROOT_DIR` overridable via `MEDIBRIDGE_ROOT`; `DATA_DIR`/`KNOWLEDGE_DIR` via `MEDIBRIDGE_DATA_DIR`/`MEDIBRIDGE_KNOWLEDGE_DIR`. |
 | `models/` | Pydantic data classes: `MBSItem`, `CoverageResult`, `UserProfile`, `Insurer`, `InsurerTier` |
 | `tools/` | 6 tools: `search_mbs_items` (hybrid RRF), `lookup_mbs_item`, `calculate_oshc_coverage`, `check_waiting_period`, `query_oshc_rules`, `search_clinics` |
 | `agent/graph.py` | `build_graph()` — LangGraph state machine entry point |
@@ -93,7 +93,7 @@ Queensland-only clinic directory (620 rows). Source DB at `data/sources/clinics_
 
 ## Data Not in Repo
 
-- `data/` — gitignored runtime data (SQLite DB, ChromaDB, user profile JSON, source seeds)
+- `data/` — committed pre-built DB, ChromaDB, and source seeds (only `user_profile.json` is gitignored)
 - `data/sources/clinics_qld.db` — raw QLD clinics DB (read-only seed input)
 - `knowledge/` — source documents for ingestion (must be provided)
 - `.env` — secrets

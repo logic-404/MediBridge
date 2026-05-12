@@ -130,27 +130,31 @@ On first use, runs an onboarding wizard (insurer, tier, policy start date, cover
 ### Docker
 
 ```bash
-# Build
+# Build (the pre-built DB and chroma data are baked into the image)
 docker build -t medibridge .
 
-# Ingest inside container (first time)
-docker run --rm \
-  -e OPENAI_API_KEY=sk-... \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/knowledge:/app/knowledge" \
-  medibridge python -m medibridge.data.ingest
-
 # Run server
-docker run \
-  -e OPENAI_API_KEY=sk-... \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/knowledge:/app/knowledge" \
-  -p 8000:8000 \
-  medibridge
+docker run -e OPENAI_API_KEY=sk-... -p 8000:8000 medibridge
 ```
 
-> [!NOTE]
-> The `data/` volume must contain an already-ingested `medibridge.db` (and optionally `chroma/`) before starting the server.
+The image includes `data/medibridge.db` and `data/chroma/` from the repo. If you mount `knowledge/` and the DB is missing, the entrypoint will auto-ingest:
+
+```bash
+docker run -e OPENAI_API_KEY=sk-... \
+  -v "$(pwd)/knowledge:/app/knowledge" \
+  -p 8000:8000 medibridge
+```
+
+#### Railway / cloud deploy
+
+Set these environment variables on the platform:
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OPENAI_API_KEY` | Yes | OpenAI API access |
+| `PORT` | Auto | Railway sets this; the server reads it |
+
+No volume mounts needed — the pre-built DB ships in the image.
 
 ---
 

@@ -1,6 +1,7 @@
 """FastAPI application — wraps the MediBridge agent + tools and serves the SPA."""
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,7 +21,7 @@ async def lifespan(app: FastAPI):
             f"Database missing at {DB_PATH}. Run: python -m medibridge.data.ingest"
         )
     if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY not set in .env")
+        raise RuntimeError("OPENAI_API_KEY not set (provide via .env or environment variable)")
     app.state.graph = build_graph()
     yield
 
@@ -46,7 +47,9 @@ if WEB_DIR.exists():
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("medibridge.server.main:app", host="0.0.0.0", port=8000, reload=True)
+    reload = os.environ.get("MEDIBRIDGE_RELOAD", "").lower() in ("1", "true")
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run("medibridge.server.main:app", host="0.0.0.0", port=port, reload=reload)
 
 
 if __name__ == "__main__":
